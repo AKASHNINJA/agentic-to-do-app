@@ -5,19 +5,24 @@ export type OrbitTask = {
   title: string;
   vibeTags: string[];
   dueAt?: string;
-  status: "todo" | "done";
+  status: string;
 };
 
 type OrbitState = {
   tasks: OrbitTask[];
+  statuses: string[];
   momentumScore: number;
   addTasks: (tasks: OrbitTask[]) => void;
   completeTask: (id: string) => void;
   snoozeTask: (id: string) => void;
+  deleteTask: (id: string) => void;
+  updateTaskStatus: (id: string, status: string) => void;
+  addCustomStatus: (status: string) => void;
 };
 
 export const useOrbitStore = create<OrbitState>((set) => ({
   tasks: [],
+  statuses: ["To Do", "In Progress", "Completed"],
   momentumScore: 25,
   addTasks: (tasks) =>
     set((state) => ({
@@ -26,7 +31,7 @@ export const useOrbitStore = create<OrbitState>((set) => ({
   completeTask: (id) =>
     set((state) => ({
       tasks: state.tasks.map((task) =>
-        task.id === id ? { ...task, status: "done" } : task
+        task.id === id ? { ...task, status: "Completed" } : task
       ),
       momentumScore: Math.min(100, state.momentumScore + 2),
     })),
@@ -41,4 +46,18 @@ export const useOrbitStore = create<OrbitState>((set) => ({
           : task
       ),
     })),
+  deleteTask: (id) =>
+    set((state) => ({
+      tasks: state.tasks.filter((task) => task.id !== id),
+    })),
+  updateTaskStatus: (id, status) =>
+    set((state) => ({
+      tasks: state.tasks.map((task) => (task.id === id ? { ...task, status } : task)),
+    })),
+  addCustomStatus: (status) =>
+    set((state) => {
+      const trimmed = status.trim();
+      if (!trimmed || state.statuses.includes(trimmed)) return state;
+      return { statuses: [...state.statuses, trimmed] };
+    }),
 }));

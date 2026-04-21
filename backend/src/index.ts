@@ -1,8 +1,12 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { parseBrainDump, validateInput } from "./agent/parse";
 
 const app = new Hono();
+app.use("*", cors());
+let googleConnected = false;
+const googleEvents: { id: string; title: string; startAt: string; endAt: string }[] = [];
 
 app.get("/health", (c) => c.json({ ok: true }));
 
@@ -13,25 +17,37 @@ app.post("/parse", async (c) => {
 });
 
 app.get("/calendar/google/preview", (c) => {
-  const now = Date.now();
   return c.json({
     provider: "google",
-    connected: false,
-    events: [
-      {
-        id: "evt-1",
-        title: "Mock: Team standup",
-        startAt: new Date(now + 2 * 60 * 60 * 1000).toISOString(),
-        endAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
-      },
-      {
-        id: "evt-2",
-        title: "Mock: Deep work block",
-        startAt: new Date(now + 26 * 60 * 60 * 1000).toISOString(),
-        endAt: new Date(now + 28 * 60 * 60 * 1000).toISOString(),
-      },
-    ],
+    connected: googleConnected,
+    events: googleEvents,
   });
+});
+
+app.post("/calendar/google/connect", (c) => {
+  googleConnected = true;
+  return c.json({
+    provider: "google",
+    connected: true,
+  });
+});
+
+app.post("/calendar/google/events", async (c) => {
+  if (!googleConnected) {
+    return c.json({ error: "Google Calendar not connected" }, 400);
+  }
+  const body = (await c.req.json()) as { title?: string; startAt?: string; endAt?: string };
+  if (!body.title || !body.startAt) {
+    return c.json({ error: "title and startAt are required" }, 400);
+  }
+  const event = {
+    id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: body.title,
+    startAt: body.startAt,
+    endAt: body.endAt ?? new Date(new Date(body.startAt).getTime() + 60 * 60 * 1000).toISOString(),
+  };
+  googleEvents.unshift(event);
+  return c.json(event);
 });
 
 serve(

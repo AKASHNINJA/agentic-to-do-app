@@ -33,13 +33,20 @@ npm start
 
 Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI for Android/iOS simulators.
 
-## Features (Current MVP)
-- **Brain dump input (text):** type free-form thoughts and submit from the home screen.
-- **Agent parsing pipeline:** mobile sends input to backend `/parse`, response is validated with Zod before rendering.
-- **Task cards with gestures:** swipe right to complete, swipe left to snooze.
-- **Momentum planet:** Skia-rendered glowing planet that grows with completion momentum.
+## Features (Current Build)
+- **Brain dump + Enter submit:** type free-form input and press Enter/Return or `Create Task`.
+- **Agentic parsing:** phrases like `tomorrow`, `next monday`, `this weekend`, `in 2 hours`, `at 7 pm` are parsed into due dates.
+- **Clean task titles:** date/time phrases are removed from task names (e.g. `running tomorrow` -> `Running` on tomorrow).
+- **Status tracking:** segmented tabs for `To Do`, `In Progress`, `Completed` with per-task status changers.
+- **Task actions:** complete, snooze, and delete on each task card.
+- **View modes:** `List View`, `Week View`, and `Calendar View`.
+- **Calendar tiles:** day tiles show context visuals from task content.
+- **Google Calendar integration controls:** connect/reconnect account, import events, and auto-create events toggle.
+- **Auto event sync:** when connected and enabled, new tasks create calendar events.
+- **3D cyberpunk UI:** segmented panels, depth/parallax motion, completion burst, momentum hero visuals.
 - **Strict TypeScript setup:** strict mode enabled in mobile and backend.
 - **Motion constants:** animation and spring values are centralized in `mobile/constants/motion.ts`.
+- **Theme tokens:** centralized theme tokens in `mobile/constants/theme.ts`.
 
 ## Architecture
 - **Mobile (`mobile/`)**
@@ -51,7 +58,7 @@ Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI fo
   - API client + response validation (`mobile/lib/agent.ts`)
 
 - **Backend (`backend/`)**
-  - Hono server exposing `/health` and `/parse`
+  - Hono server exposing `/health`, `/parse`, and Google Calendar integration endpoints
   - Parsing module with schema-first validation (`backend/src/agent/parse.ts`)
   - Zod input/output contracts for safe agent output handling
 
@@ -62,6 +69,10 @@ Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI fo
 - `mobile/` - React Native app
 - `backend/` - Hono API
 - `docs/specs/` - feature and MVP specs
+
+## Roadmap
+- Prioritized roadmap for the 20 expansion features:
+  - `docs/specs/orbit-roadmap.md`
 
 ## Validation Commands
 ```powershell
