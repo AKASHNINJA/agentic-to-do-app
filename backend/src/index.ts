@@ -12,6 +12,28 @@ app.post("/parse", async (c) => {
   return c.json(parsed);
 });
 
+app.get("/calendar/google/preview", (c) => {
+  const now = Date.now();
+  return c.json({
+    provider: "google",
+    connected: false,
+    events: [
+      {
+        id: "evt-1",
+        title: "Mock: Team standup",
+        startAt: new Date(now + 2 * 60 * 60 * 1000).toISOString(),
+        endAt: new Date(now + 3 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: "evt-2",
+        title: "Mock: Deep work block",
+        startAt: new Date(now + 26 * 60 * 60 * 1000).toISOString(),
+        endAt: new Date(now + 28 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  });
+});
+
 serve(
   {
     fetch: app.fetch,
