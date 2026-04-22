@@ -35,12 +35,14 @@ Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI fo
 
 ## Features (Current Build)
 - **Brain dump + Enter submit:** type free-form input and press Enter/Return or `Create Task`.
-- **Agentic parsing:** phrases like `tomorrow`, `next monday`, `this weekend`, `in 2 hours`, `at 7 pm` are parsed into due dates.
-- **Clean task titles:** date/time phrases are removed from task names (e.g. `running tomorrow` -> `Running` on tomorrow).
+- **Agentic parsing:** phrases like `tomorrow`, `next monday`, `this weekend`, `in 2 hours`, `at 7 pm`, bare weekday names (`Running Monday`), and preposition forms (`on Friday`, `by Tuesday`) are parsed into due dates.
+- **Clean task titles:** leading/trailing connectors and date phrases are stripped (e.g. `running on next monday` -> `Running` scheduled for next Monday).
+- **Auto-jump to due date:** creating a task automatically selects its due day in Week/Calendar views so it's immediately visible.
+- **Inline date picker:** quick chips (`Today`, `Tomorrow`, `+2d`, `+3d`, `Next Mon`), a native HTML date input on web, and a `Clear` pill. An explicit picked date overrides natural language.
 - **Status tracking:** segmented tabs for `To Do`, `In Progress`, `Completed` with per-task status changers.
 - **Task actions:** complete, snooze, and delete on each task card.
 - **View modes:** `List View`, `Week View`, and `Calendar View`.
-- **Calendar tiles:** day tiles show context visuals from task content.
+- **Calendar tiles with context art:** each day is a gradient tile with a context emoji (running, study, meeting, shopping, family, cooking, coding, travel, writing, cleaning, music), weekday label, first-task preview, a count badge, and today/selected highlighting.
 - **Google Calendar integration controls:** connect/reconnect account, import events, and auto-create events toggle.
 - **Auto event sync:** when connected and enabled, new tasks create calendar events.
 - **3D cyberpunk UI:** segmented panels, depth/parallax motion, completion burst, momentum hero visuals.
@@ -69,6 +71,20 @@ Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI fo
 - `mobile/` - React Native app
 - `backend/` - Hono API
 - `docs/specs/` - feature and MVP specs
+
+## Date Input Cheatsheet
+Orbit accepts dates three different ways — pick whichever is fastest:
+
+1. **Natural language in the text input**
+   - `running tomorrow at 7am`
+   - `study friday`
+   - `call mom this weekend`
+   - `ship release in 2 hours`
+   - `running on next monday` (prepositions are stripped, title becomes `Running`)
+2. **Date chips** above the input bar: `Today`, `Tomorrow`, `+2d`, `+3d`, `Next Mon`, `Clear`.
+3. **Native date input** (web): click the date field to open the browser's calendar picker.
+
+If you pick a date via chips or the native picker, it overrides any natural-language date in the text. After creation, the Week and Calendar views automatically jump to that day so the new task is visible.
 
 ## Upcoming Features
 - **Google Calendar (full integration):**
