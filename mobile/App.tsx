@@ -26,6 +26,7 @@ export default function App() {
   const [showGcalOptions, setShowGcalOptions] = useState(false);
   const [autoCreateGcalEvents, setAutoCreateGcalEvents] = useState(true);
   const [quoteIndex, setQuoteIndex] = useState(0);
+  const [pickedDate, setPickedDate] = useState<string>("");
   const {
     tasks,
     statuses,
@@ -139,7 +140,16 @@ export default function App() {
       const offset = Math.floor((date.getTime() - new Date().setHours(0, 0, 0, 0)) / (24 * 60 * 60 * 1000));
       const dayTasks = tasks.filter((task) => task.dueAt && new Date(task.dueAt).toDateString() === date.toDateString());
       const contextSeed = dayTasks[0]?.title ?? dayTasks[0]?.vibeTags?.[0] ?? "";
-      return { key: date.toISOString(), date, offset, dotCount: dayTasks.length, contextSeed };
+      const firstTitle = dayTasks[0]?.title ?? "";
+      return {
+        key: date.toISOString(),
+        date,
+        offset,
+        dotCount: dayTasks.length,
+        contextSeed,
+        firstTitle,
+        weekday: date.toLocaleDateString("en-US", { weekday: "short" }),
+      };
     });
   }, [tasks]);
 
@@ -165,31 +175,38 @@ export default function App() {
     setParseStatus("");
     try {
       const parsed = await parseBrainDump(input);
-      addTasks(
-        parsed.tasks.map((task) => ({
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          title: task.title,
-          vibeTags: task.vibeTags,
-          dueAt:
-            task.dueAt ??
-            new Date(Date.now() + selectedDayOffset * 24 * 60 * 60 * 1000).toISOString(),
-          status: task.status ?? "To Do",
-        }))
-      );
+      const fallbackIso = pickedDate
+        ? new Date(`${pickedDate}T09:00:00`).toISOString()
+        : new Date(Date.now() + selectedDayOffset * 24 * 60 * 60 * 1000).toISOString();
+      const resolvedTasks = parsed.tasks.map((task) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        title: task.title,
+        vibeTags: task.vibeTags,
+        dueAt: pickedDate ? fallbackIso : task.dueAt ?? fallbackIso,
+        status: task.status ?? "To Do",
+      }));
+      addTasks(resolvedTasks);
+
+      const firstDue = resolvedTasks[0]?.dueAt;
+      if (firstDue) {
+        const startOfToday = new Date();
+        startOfToday.setHours(0, 0, 0, 0);
+        const target = new Date(firstDue);
+        target.setHours(0, 0, 0, 0);
+        const offset = Math.round((target.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
+        setSelectedDayOffset(offset);
+      }
+
       if (gcalConnected && autoCreateGcalEvents) {
         await Promise.all(
-          parsed.tasks.map((task) =>
-            createGoogleCalendarEvent({
-              title: task.title,
-              startAt:
-                task.dueAt ??
-                new Date(Date.now() + selectedDayOffset * 24 * 60 * 60 * 1000).toISOString(),
-            })
+          resolvedTasks.map((task) =>
+            createGoogleCalendarEvent({ title: task.title, startAt: task.dueAt })
           )
         );
         setCalendarStatus("Calendar: synced (new tasks also created in GCal)");
       }
       setInput("");
+      setPickedDate("");
       if (parsed.uncertain) {
         setParseStatus("Saved quickly in offline mode. Agent enrichment will improve with backend.");
       }
@@ -301,6 +318,7 @@ export default function App() {
             depthIndex={index}
           />
         ))}
+        <DatePickerRow pickedDate={pickedDate} setPickedDate={setPickedDate} />
         <LinearGradient colors={["rgba(0,229,255,0.35)", "rgba(255,43,214,0.28)"]} style={styles.inputShell}>
         <View style={styles.inputBar}>
           <TextInput
@@ -405,6 +423,7 @@ export default function App() {
           <MomentumPlanet score={momentumScore} />
           <CompletionBurst trigger={burstTrigger} />
         </Animated.View>
+        <DatePickerRow pickedDate={pickedDate} setPickedDate={setPickedDate} />
         <LinearGradient colors={["rgba(0,229,255,0.35)", "rgba(255,43,214,0.28)"]} style={styles.inputShell}>
         <View style={styles.inputBar}>
           <TextInput
@@ -573,6 +592,137 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.3,
   },
+  tileGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4,
+  },
+  tile: {
+    width: "23.5%",
+    minWidth: 76,
+    aspectRatio: 0.88,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(146,168,204,0.35)",
+    overflow: "hidden",
+    backgroundColor: "rgba(12,18,40,0.9)",
+  },
+  tileSelected: {
+    borderColor: "#00E5FF",
+    borderWidth: 2,
+  },
+  tileToday: {
+    borderColor: "#FF2BD6",
+  },
+  tileGradient: {
+    flex: 1,
+    padding: 8,
+    justifyContent: "space-between",
+  },
+  tileHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tileWeekday: {
+    color: "#92A8CC",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.6,
+  },
+  tileDay: {
+    color: "#ECF6FF",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  tileArtWrap: {
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+  },
+  tileArt: {
+    fontSize: 32,
+    opacity: 0.92,
+  },
+  tileFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+  },
+  tileTaskTitle: {
+    color: "#ECF6FF",
+    fontSize: 10,
+    fontWeight: "600",
+    flex: 1,
+  },
+  tileBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 5,
+    backgroundColor: "#FF2BD6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tileBadgeText: {
+    color: "#FFE8FF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  tileEmptyText: {
+    color: "#6B80A8",
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+  },
+  dateRow: {
+    width: "94%",
+    alignSelf: "center",
+    backgroundColor: "rgba(12,18,40,0.78)",
+    borderWidth: 1,
+    borderColor: "rgba(0,229,255,0.28)",
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
+    gap: 6,
+  },
+  dateRowLabel: {
+    color: "#9ED7FF",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.4,
+  },
+  dateRowOptions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    alignItems: "center",
+  },
+  dateChip: {
+    borderWidth: 1,
+    borderColor: "rgba(146,168,204,0.45)",
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(12,18,40,0.9)",
+  },
+  dateChipActive: {
+    borderColor: "#00E5FF",
+    backgroundColor: "rgba(0,229,255,0.2)",
+  },
+  dateChipText: { color: "#CFE6FF", fontSize: 11, fontWeight: "700" },
+  dateChipTextActive: { color: "#ECF6FF" },
+  dateClear: {
+    borderWidth: 1,
+    borderColor: "rgba(255,43,214,0.5)",
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: "rgba(60,10,50,0.7)",
+  },
+  dateClearText: { color: "#FFD1F6", fontSize: 11, fontWeight: "700" },
 });
 
 type CalendarRowProps = {
@@ -610,40 +760,68 @@ function CalendarRow({ weekDays, selectedDayOffset, setSelectedDayOffset }: Cale
 }
 
 type MonthGridProps = {
-  days: { key: string; date: Date; offset: number; dotCount: number; contextSeed: string }[];
+  days: {
+    key: string;
+    date: Date;
+    offset: number;
+    dotCount: number;
+    contextSeed: string;
+    firstTitle: string;
+    weekday: string;
+  }[];
   selectedDayOffset: number;
   setSelectedDayOffset: (offset: number) => void;
 };
 
 function MonthGrid({ days, selectedDayOffset, setSelectedDayOffset }: MonthGridProps) {
+  const today = new Date().toDateString();
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+    <View style={styles.tileGrid}>
       {days.map((item) => {
         const selected = item.offset === selectedDayOffset;
+        const isToday = item.date.toDateString() === today;
+        const ctx = contextTheme(item.contextSeed);
+        const empty = item.dotCount === 0;
         return (
           <Pressable
             key={item.key}
             onPress={() => setSelectedDayOffset(item.offset)}
-            style={{
-              width: "12.8%",
-              minWidth: 38,
-              borderRadius: 8,
-              minHeight: 54,
-              paddingVertical: 6,
-              alignItems: "center",
-              backgroundColor: selected ? "rgba(0,229,255,0.2)" : "rgba(12,18,40,0.9)",
-              borderWidth: 1,
-              borderColor: selected ? "#00E5FF" : "rgba(146,168,204,0.45)",
-              overflow: "hidden",
-            }}
+            style={[
+              styles.tile,
+              selected && styles.tileSelected,
+              isToday && !selected && styles.tileToday,
+            ]}
           >
-            <Text style={{ position: "absolute", right: 4, top: 2, fontSize: 18, opacity: 0.32 }}>
-              {contextEmoji(item.contextSeed)}
-            </Text>
-            <Text style={{ color: "#ECF6FF", fontSize: 12 }}>{item.date.getDate()}</Text>
-            {item.dotCount > 0 && (
-              <View style={{ marginTop: 3, width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF2BD6" }} />
-            )}
+            <LinearGradient
+              colors={empty ? ["rgba(12,18,40,0.95)", "rgba(9,15,35,0.95)"] : ctx.colors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.tileGradient}
+            >
+              <View style={styles.tileHeader}>
+                <Text style={styles.tileWeekday}>{item.weekday.toUpperCase()}</Text>
+                <Text style={styles.tileDay}>{item.date.getDate()}</Text>
+              </View>
+
+              <View style={styles.tileArtWrap}>
+                <Text style={styles.tileArt}>{empty ? "·" : ctx.emoji}</Text>
+              </View>
+
+              <View style={styles.tileFooter}>
+                {item.dotCount > 0 ? (
+                  <>
+                    <Text numberOfLines={1} style={styles.tileTaskTitle}>
+                      {item.firstTitle}
+                    </Text>
+                    <View style={styles.tileBadge}>
+                      <Text style={styles.tileBadgeText}>{item.dotCount}</Text>
+                    </View>
+                  </>
+                ) : (
+                  <Text style={styles.tileEmptyText}>free</Text>
+                )}
+              </View>
+            </LinearGradient>
           </Pressable>
         );
       })}
@@ -651,14 +829,36 @@ function MonthGrid({ days, selectedDayOffset, setSelectedDayOffset }: MonthGridP
   );
 }
 
-function contextEmoji(seed: string): string {
+type ContextTheme = {
+  emoji: string;
+  colors: [string, string];
+};
+
+function contextTheme(seed: string): ContextTheme {
   const s = seed.toLowerCase();
-  if (s.includes("run") || s.includes("gym") || s.includes("workout")) return "🏃";
-  if (s.includes("study") || s.includes("read")) return "📘";
-  if (s.includes("meeting") || s.includes("call")) return "📅";
-  if (s.includes("buy") || s.includes("shop")) return "🛒";
-  if (s.includes("mom") || s.includes("family")) return "🏠";
-  return "✨";
+  if (s.includes("run") || s.includes("gym") || s.includes("workout") || s.includes("yoga"))
+    return { emoji: "🏃", colors: ["rgba(0,229,255,0.35)", "rgba(0,140,255,0.22)"] };
+  if (s.includes("study") || s.includes("read") || s.includes("learn"))
+    return { emoji: "📘", colors: ["rgba(120,120,255,0.35)", "rgba(60,40,180,0.28)"] };
+  if (s.includes("meeting") || s.includes("call") || s.includes("sync") || s.includes("standup"))
+    return { emoji: "💼", colors: ["rgba(255,43,214,0.32)", "rgba(120,20,120,0.28)"] };
+  if (s.includes("buy") || s.includes("shop") || s.includes("grocery"))
+    return { emoji: "🛒", colors: ["rgba(255,200,80,0.35)", "rgba(220,100,40,0.25)"] };
+  if (s.includes("mom") || s.includes("dad") || s.includes("family") || s.includes("home"))
+    return { emoji: "🏠", colors: ["rgba(255,160,90,0.32)", "rgba(200,60,90,0.25)"] };
+  if (s.includes("cook") || s.includes("dinner") || s.includes("lunch") || s.includes("eat"))
+    return { emoji: "🍳", colors: ["rgba(255,140,60,0.35)", "rgba(180,40,40,0.25)"] };
+  if (s.includes("code") || s.includes("debug") || s.includes("build") || s.includes("deploy"))
+    return { emoji: "💻", colors: ["rgba(80,255,200,0.3)", "rgba(20,120,140,0.25)"] };
+  if (s.includes("travel") || s.includes("flight") || s.includes("trip"))
+    return { emoji: "✈️", colors: ["rgba(120,200,255,0.35)", "rgba(40,80,200,0.25)"] };
+  if (s.includes("write") || s.includes("journal") || s.includes("note"))
+    return { emoji: "✍️", colors: ["rgba(200,180,255,0.32)", "rgba(100,60,180,0.25)"] };
+  if (s.includes("clean") || s.includes("laundry"))
+    return { emoji: "🧺", colors: ["rgba(170,255,200,0.3)", "rgba(40,140,120,0.25)"] };
+  if (s.includes("music") || s.includes("play"))
+    return { emoji: "🎧", colors: ["rgba(255,120,200,0.32)", "rgba(120,30,140,0.25)"] };
+  return { emoji: "✨", colors: ["rgba(0,229,255,0.22)", "rgba(255,43,214,0.18)"] };
 }
 
 type StatusTabsProps = {
@@ -685,6 +885,76 @@ function StatusTabs({ statuses, activeStatusTab, setActiveStatusTab }: StatusTab
     </View>
   );
 }
+
+type DatePickerRowProps = {
+  pickedDate: string;
+  setPickedDate: (value: string) => void;
+};
+
+function DatePickerRow({ pickedDate, setPickedDate }: DatePickerRowProps) {
+  const toIsoDate = (offsetDays: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  };
+  const nextMonday = () => {
+    const d = new Date();
+    const daysAhead = ((1 - d.getDay() + 7) % 7) || 7;
+    return toIsoDate(daysAhead);
+  };
+  const quickOptions: { label: string; value: string }[] = [
+    { label: "Today", value: toIsoDate(0) },
+    { label: "Tomorrow", value: toIsoDate(1) },
+    { label: "+2d", value: toIsoDate(2) },
+    { label: "+3d", value: toIsoDate(3) },
+    { label: "Next Mon", value: nextMonday() },
+  ];
+  const label = pickedDate ? new Date(`${pickedDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "No date";
+
+  return (
+    <View style={styles.dateRow}>
+      <Text style={styles.dateRowLabel}>Due: {label}</Text>
+      <View style={styles.dateRowOptions}>
+        {quickOptions.map((opt) => {
+          const active = pickedDate === opt.value;
+          return (
+            <Pressable key={opt.label} onPress={() => setPickedDate(active ? "" : opt.value)} style={[styles.dateChip, active && styles.dateChipActive]}>
+              <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+        {Platform.OS === "web" ? (
+          // @ts-ignore -- intentional: HTML input for rich date picker on web
+          <input
+            type="date"
+            value={pickedDate}
+            onChange={(e: any) => setPickedDate(e.target.value)}
+            style={webDateInputStyle}
+          />
+        ) : null}
+        {pickedDate ? (
+          <Pressable onPress={() => setPickedDate("")} style={styles.dateClear}>
+            <Text style={styles.dateClearText}>Clear</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const webDateInputStyle = {
+  background: "rgba(12,18,40,0.9)",
+  color: "#ECF6FF",
+  border: "1px solid rgba(0,229,255,0.35)",
+  borderRadius: 8,
+  padding: "6px 8px",
+  fontSize: 12,
+  fontWeight: 700,
+  outline: "none",
+} as const;
 
 function QuoteBanner({ quote }: { quote: string }) {
   return (

@@ -64,13 +64,12 @@ function inferDueAt(text: string): string | undefined {
 }
 
 function inferBaseDate(normalized: string, now: Date): Date | undefined {
-  if (normalized.includes("next monday")) return nextWeekday(now, 1);
-  if (normalized.includes("next tuesday")) return nextWeekday(now, 2);
-  if (normalized.includes("next wednesday")) return nextWeekday(now, 3);
-  if (normalized.includes("next thursday")) return nextWeekday(now, 4);
-  if (normalized.includes("next friday")) return nextWeekday(now, 5);
-  if (normalized.includes("next saturday")) return nextWeekday(now, 6);
-  if (normalized.includes("next sunday")) return nextWeekday(now, 0);
+  const weekdayMatch = normalized.match(/\b(?:next\s+|on\s+(?:next\s+)?|this\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/);
+  if (weekdayMatch) {
+    const map: Record<string, number> = { sunday: 0, monday: 1, tuesday: 2, wednesday: 3, thursday: 4, friday: 5, saturday: 6 };
+    const target = map[weekdayMatch[1]];
+    if (target !== undefined) return nextWeekday(now, target);
+  }
 
   if (normalized.includes("this weekend")) {
     const d = new Date(now);
@@ -134,17 +133,20 @@ function suggestTags(text: string): string[] {
 }
 
 function normalizeTaskTitle(text: string): string {
+  const prep = "(?:on|at|by|for|to|from|this|on\\s+the)";
   const cleaned = text
+    .replace(new RegExp(`\\b${prep}\\s+next\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b`, "gi"), "")
     .replace(/\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, "")
+    .replace(new RegExp(`\\b${prep}\\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\\b`, "gi"), "")
+    .replace(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/gi, "")
     .replace(/\bthis\s+weekend\b/gi, "")
-    .replace(/\btomorrow\b/gi, "")
-    .replace(/\btoday\b/gi, "")
-    .replace(/\btonight\b/gi, "")
+    .replace(/\b(tomorrow|today|tonight)\b/gi, "")
     .replace(/\bin\s+\d+\s*hours?\b/gi, "")
     .replace(/\bat\s+\d{1,2}(?::\d{2})?\s*(am|pm)?\b/gi, "")
     .replace(/\s+/g, " ")
     .trim()
-    .replace(/^(to|for|on)\s+/i, "")
+    .replace(/^(to|for|on|at|by)\s+/i, "")
+    .replace(/\s+(on|at|by|for|to|from|this|next)$/i, "")
     .trim();
 
   if (!cleaned) return text.charAt(0).toUpperCase() + text.slice(1);
