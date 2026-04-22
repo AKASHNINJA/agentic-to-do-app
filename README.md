@@ -70,6 +70,20 @@ Then open the app with Expo Go (scan QR code), or press `a` / `i` in Expo CLI fo
 - `backend/` - Hono API
 - `docs/specs/` - feature and MVP specs
 
+## Upcoming Features
+- **Google Calendar (full integration):**
+  - Real Google OAuth sign-in flow (replacing the current preview/mock backend).
+  - Two-way sync: edits on tasks update linked GCal events and vice versa.
+  - Smart time-blocking: agent suggests calendar slots based on free time + task energy.
+  - Per-calendar selection for import and auto-create targets.
+- **CLI Friendly App:**
+  - First-class `orbit` command-line tool to manage tasks without opening the UI.
+  - Natural language task creation: `orbit add "running tomorrow at 7am"`.
+  - Quick listing and filtering: `orbit list --today`, `orbit list --status "In Progress"`.
+  - Status and delete commands: `orbit done <id>`, `orbit rm <id>`.
+  - GCal workflow from the shell: `orbit gcal connect`, `orbit gcal import`.
+  - Pipe-friendly output (JSON mode) for scripting and automation.
+
 ## Roadmap
 - Prioritized roadmap for the 20 expansion features:
   - `docs/specs/orbit-roadmap.md`
