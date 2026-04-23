@@ -98,7 +98,25 @@ export function TaskCard({
         shadowOffset: { width: 0, height: 7 - Math.min(depthIndex, 5) },
       }}
     >
-      <Text style={{ color: "#ECF6FF", fontSize: 16, fontWeight: "700" }}>{task.title}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <Text style={{ color: "#ECF6FF", fontSize: 16, fontWeight: "700", flexShrink: 1 }}>{task.title}</Text>
+        {task.dueAt ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "rgba(0,229,255,0.12)",
+              borderColor: "rgba(0,229,255,0.55)",
+              borderWidth: 1,
+              borderRadius: 999,
+              paddingHorizontal: 8,
+              paddingVertical: 2,
+            }}
+          >
+            <Text style={{ color: "#9ED7FF", fontSize: 11, fontWeight: "700" }}>{formatDueDate(task.dueAt)}</Text>
+          </View>
+        ) : null}
+      </View>
       <View style={{ flexDirection: "row", marginTop: 6 }}>
         {task.vibeTags.map((tag) => (
           <View
@@ -168,6 +186,31 @@ export function TaskCard({
       <Reanimated.View style={animatedStyle}>{cardBody}</Reanimated.View>
     </GestureDetector>
   );
+}
+
+function formatDueDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const day = new Date(d);
+  day.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((day.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+
+  let dayLabel: string;
+  if (diffDays === 0) dayLabel = "Today";
+  else if (diffDays === 1) dayLabel = "Tomorrow";
+  else if (diffDays === -1) dayLabel = "Yesterday";
+  else if (diffDays > 1 && diffDays < 7)
+    dayLabel = d.toLocaleDateString("en-US", { weekday: "short" });
+  else dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0;
+  if (hasTime) {
+    const timeLabel = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    return `${dayLabel} · ${timeLabel}`;
+  }
+  return dayLabel;
 }
 
 function formatVibeTag(tag: string): string {

@@ -26,7 +26,15 @@ export default function App() {
   const [showGcalOptions, setShowGcalOptions] = useState(false);
   const [autoCreateGcalEvents, setAutoCreateGcalEvents] = useState(true);
   const [quoteIndex, setQuoteIndex] = useState(0);
-  const [pickedDate, setPickedDate] = useState<string>("");
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [monthOffset, setMonthOffset] = useState(0);
+  const [pickedDate, setPickedDate] = useState<string>(() => {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${dd}`;
+  });
   const {
     tasks,
     statuses,
@@ -117,10 +125,16 @@ export default function App() {
   };
 
   const weekDays = useMemo(() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const startOfThisWeek = new Date(now);
+    startOfThisWeek.setDate(now.getDate() - now.getDay());
+    const startOfWindow = new Date(startOfThisWeek);
+    startOfWindow.setDate(startOfThisWeek.getDate() + weekOffset * 7);
     return Array.from({ length: 7 }).map((_, i) => {
-      const offset = i - 3;
-      const date = new Date();
-      date.setDate(date.getDate() + offset);
+      const date = new Date(startOfWindow);
+      date.setDate(startOfWindow.getDate() + i);
+      const offset = Math.round((date.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
       return {
         key: date.toISOString(),
         offset,
@@ -128,16 +142,30 @@ export default function App() {
         day: date.getDate(),
       };
     });
-  }, []);
+  }, [weekOffset]);
+
+  const weekLabel = useMemo(() => {
+    if (weekDays.length === 0) return "";
+    const first = new Date(weekDays[0].key);
+    const last = new Date(weekDays[weekDays.length - 1].key);
+    const sameMonth = first.getMonth() === last.getMonth();
+    const firstLabel = first.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const lastLabel = sameMonth
+      ? String(last.getDate())
+      : last.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${firstLabel} – ${lastLabel}`;
+  }, [weekDays]);
 
   const monthDays = useMemo(() => {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    const count = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const anchor = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    const count = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
     return Array.from({ length: count }).map((_, i) => {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      const offset = Math.floor((date.getTime() - new Date().setHours(0, 0, 0, 0)) / (24 * 60 * 60 * 1000));
+      const date = new Date(anchor);
+      date.setDate(anchor.getDate() + i);
+      const offset = Math.round((date.getTime() - todayStart.getTime()) / (24 * 60 * 60 * 1000));
       const dayTasks = tasks.filter((task) => task.dueAt && new Date(task.dueAt).toDateString() === date.toDateString());
       const contextSeed = dayTasks[0]?.title ?? dayTasks[0]?.vibeTags?.[0] ?? "";
       const firstTitle = dayTasks[0]?.title ?? "";
@@ -151,7 +179,13 @@ export default function App() {
         weekday: date.toLocaleDateString("en-US", { weekday: "short" }),
       };
     });
-  }, [tasks]);
+  }, [tasks, monthOffset]);
+
+  const monthLabel = useMemo(() => {
+    const now = new Date();
+    const anchor = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+    return anchor.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }, [monthOffset]);
 
   const visibleTasks = useMemo(() => {
     if (viewMode === "list") {
@@ -175,26 +209,45 @@ export default function App() {
     setParseStatus("");
     try {
       const parsed = await parseBrainDump(input);
-      const fallbackIso = pickedDate
+      const pickedIso = pickedDate
         ? new Date(`${pickedDate}T09:00:00`).toISOString()
-        : new Date(Date.now() + selectedDayOffset * 24 * 60 * 60 * 1000).toISOString();
+        : new Date().toISOString();
       const resolvedTasks = parsed.tasks.map((task) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         title: task.title,
         vibeTags: task.vibeTags,
-        dueAt: pickedDate ? fallbackIso : task.dueAt ?? fallbackIso,
+        dueAt: task.dueAt ?? pickedIso,
         status: task.status ?? "To Do",
       }));
       addTasks(resolvedTasks);
 
       const firstDue = resolvedTasks[0]?.dueAt;
       if (firstDue) {
+        const due = new Date(firstDue);
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
-        const target = new Date(firstDue);
+        const target = new Date(due);
         target.setHours(0, 0, 0, 0);
         const offset = Math.round((target.getTime() - startOfToday.getTime()) / (24 * 60 * 60 * 1000));
         setSelectedDayOffset(offset);
+
+        const startOfThisWeek = new Date(startOfToday);
+        startOfThisWeek.setDate(startOfToday.getDate() - startOfToday.getDay());
+        const startOfDueWeek = new Date(target);
+        startOfDueWeek.setDate(target.getDate() - target.getDay());
+        const newWeekOffset = Math.round(
+          (startOfDueWeek.getTime() - startOfThisWeek.getTime()) / (7 * 24 * 60 * 60 * 1000)
+        );
+        setWeekOffset(newWeekOffset);
+
+        const now = new Date();
+        const newMonthOffset = (due.getFullYear() - now.getFullYear()) * 12 + (due.getMonth() - now.getMonth());
+        setMonthOffset(newMonthOffset);
+
+        const y = due.getFullYear();
+        const m = String(due.getMonth() + 1).padStart(2, "0");
+        const dd = String(due.getDate()).padStart(2, "0");
+        setPickedDate(`${y}-${m}-${dd}`);
       }
 
       if (gcalConnected && autoCreateGcalEvents) {
@@ -206,7 +259,6 @@ export default function App() {
         setCalendarStatus("Calendar: synced (new tasks also created in GCal)");
       }
       setInput("");
-      setPickedDate("");
       if (parsed.uncertain) {
         setParseStatus("Saved quickly in offline mode. Agent enrichment will improve with backend.");
       }
@@ -292,13 +344,31 @@ export default function App() {
         ) : null}
         <Text style={styles.calendarStatus}>{calendarStatus}</Text>
         {viewMode === "calendar" ? (
-          <MonthGrid days={monthDays} selectedDayOffset={selectedDayOffset} setSelectedDayOffset={setSelectedDayOffset} />
+          <>
+            <ViewToggleHeader
+              label={monthLabel}
+              onPrev={() => setMonthOffset((v) => v - 1)}
+              onNext={() => setMonthOffset((v) => v + 1)}
+              onReset={() => setMonthOffset(0)}
+              resetLabel="This month"
+            />
+            <MonthGrid days={monthDays} selectedDayOffset={selectedDayOffset} setSelectedDayOffset={setSelectedDayOffset} />
+          </>
         ) : viewMode === "week" ? (
-        <CalendarRow
-          weekDays={weekDays}
-          selectedDayOffset={selectedDayOffset}
-          setSelectedDayOffset={setSelectedDayOffset}
-        />
+          <>
+            <ViewToggleHeader
+              label={weekLabel}
+              onPrev={() => setWeekOffset((v) => v - 1)}
+              onNext={() => setWeekOffset((v) => v + 1)}
+              onReset={() => setWeekOffset(0)}
+              resetLabel="This week"
+            />
+            <CalendarRow
+              weekDays={weekDays}
+              selectedDayOffset={selectedDayOffset}
+              setSelectedDayOffset={setSelectedDayOffset}
+            />
+          </>
         ) : null}
         <Text style={styles.sectionTitle}>{viewMode === "list" ? "All Tasks" : "Today Queue"}</Text>
         </View>
@@ -318,9 +388,9 @@ export default function App() {
             depthIndex={index}
           />
         ))}
-        <DatePickerRow pickedDate={pickedDate} setPickedDate={setPickedDate} />
         <LinearGradient colors={["rgba(0,229,255,0.35)", "rgba(255,43,214,0.28)"]} style={styles.inputShell}>
         <View style={styles.inputBar}>
+          <InlineDateField pickedDate={pickedDate} setPickedDate={setPickedDate} />
           <TextInput
             value={input}
             onChangeText={setInput}
@@ -379,13 +449,31 @@ export default function App() {
         ) : null}
         <Text style={styles.calendarStatus}>{calendarStatus}</Text>
         {viewMode === "calendar" ? (
-          <MonthGrid days={monthDays} selectedDayOffset={selectedDayOffset} setSelectedDayOffset={setSelectedDayOffset} />
+          <>
+            <ViewToggleHeader
+              label={monthLabel}
+              onPrev={() => setMonthOffset((v) => v - 1)}
+              onNext={() => setMonthOffset((v) => v + 1)}
+              onReset={() => setMonthOffset(0)}
+              resetLabel="This month"
+            />
+            <MonthGrid days={monthDays} selectedDayOffset={selectedDayOffset} setSelectedDayOffset={setSelectedDayOffset} />
+          </>
         ) : viewMode === "week" ? (
-        <CalendarRow
-          weekDays={weekDays}
-          selectedDayOffset={selectedDayOffset}
-          setSelectedDayOffset={setSelectedDayOffset}
-        />
+          <>
+            <ViewToggleHeader
+              label={weekLabel}
+              onPrev={() => setWeekOffset((v) => v - 1)}
+              onNext={() => setWeekOffset((v) => v + 1)}
+              onReset={() => setWeekOffset(0)}
+              resetLabel="This week"
+            />
+            <CalendarRow
+              weekDays={weekDays}
+              selectedDayOffset={selectedDayOffset}
+              setSelectedDayOffset={setSelectedDayOffset}
+            />
+          </>
         ) : null}
         <Text style={styles.sectionTitle}>{viewMode === "list" ? "All Tasks" : "Today Queue"}</Text>
         </View>
@@ -423,9 +511,9 @@ export default function App() {
           <MomentumPlanet score={momentumScore} />
           <CompletionBurst trigger={burstTrigger} />
         </Animated.View>
-        <DatePickerRow pickedDate={pickedDate} setPickedDate={setPickedDate} />
         <LinearGradient colors={["rgba(0,229,255,0.35)", "rgba(255,43,214,0.28)"]} style={styles.inputShell}>
         <View style={styles.inputBar}>
+          <InlineDateField pickedDate={pickedDate} setPickedDate={setPickedDate} />
           <TextInput
             value={input}
             onChangeText={setInput}
@@ -677,52 +765,91 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     letterSpacing: 0.4,
   },
-  dateRow: {
-    width: "94%",
-    alignSelf: "center",
-    backgroundColor: "rgba(12,18,40,0.78)",
-    borderWidth: 1,
-    borderColor: "rgba(0,229,255,0.28)",
+  inlineDateWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginRight: 4,
+  },
+  inlineDateClear: {
+    marginLeft: 2,
+    marginRight: 6,
+    width: 20,
+    height: 20,
     borderRadius: 10,
-    padding: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,43,214,0.3)",
+    borderWidth: 1,
+    borderColor: "rgba(255,43,214,0.6)",
+  },
+  inlineDateClearText: {
+    color: "#FFD1F6",
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 14,
+  },
+  inlineDateChip: {
+    borderWidth: 1,
+    borderColor: "rgba(0,229,255,0.45)",
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    backgroundColor: "rgba(9,15,35,0.96)",
+    marginRight: 6,
+    justifyContent: "center",
+  },
+  inlineDateChipText: {
+    color: "#9ED7FF",
+    fontSize: 12,
+    fontWeight: "700",
+    letterSpacing: 0.3,
+  },
+  viewToggleHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 8,
     gap: 6,
   },
-  dateRowLabel: {
+  viewToggleArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(0,229,255,0.45)",
+    backgroundColor: "rgba(12,18,40,0.9)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewToggleArrowText: {
     color: "#9ED7FF",
-    fontSize: 11,
-    fontWeight: "700",
+    fontSize: 20,
+    fontWeight: "800",
+    lineHeight: 22,
+  },
+  viewToggleLabelWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "rgba(146,168,204,0.3)",
+    backgroundColor: "rgba(12,18,40,0.7)",
+  },
+  viewToggleLabel: {
+    color: "#ECF6FF",
+    fontSize: 13,
+    fontWeight: "800",
     letterSpacing: 0.4,
   },
-  dateRowOptions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    alignItems: "center",
+  viewToggleReset: {
+    color: "#6B80A8",
+    fontSize: 10,
+    fontWeight: "600",
+    letterSpacing: 0.4,
+    marginTop: 1,
   },
-  dateChip: {
-    borderWidth: 1,
-    borderColor: "rgba(146,168,204,0.45)",
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: "rgba(12,18,40,0.9)",
-  },
-  dateChipActive: {
-    borderColor: "#00E5FF",
-    backgroundColor: "rgba(0,229,255,0.2)",
-  },
-  dateChipText: { color: "#CFE6FF", fontSize: 11, fontWeight: "700" },
-  dateChipTextActive: { color: "#ECF6FF" },
-  dateClear: {
-    borderWidth: 1,
-    borderColor: "rgba(255,43,214,0.5)",
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: "rgba(60,10,50,0.7)",
-  },
-  dateClearText: { color: "#FFD1F6", fontSize: 11, fontWeight: "700" },
 });
 
 type CalendarRowProps = {
@@ -886,67 +1013,80 @@ function StatusTabs({ statuses, activeStatusTab, setActiveStatusTab }: StatusTab
   );
 }
 
-type DatePickerRowProps = {
+type InlineDateFieldProps = {
   pickedDate: string;
   setPickedDate: (value: string) => void;
 };
 
-function DatePickerRow({ pickedDate, setPickedDate }: DatePickerRowProps) {
-  const toIsoDate = (offsetDays: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + offsetDays);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${dd}`;
-  };
-  const nextMonday = () => {
-    const d = new Date();
-    const daysAhead = ((1 - d.getDay() + 7) % 7) || 7;
-    return toIsoDate(daysAhead);
-  };
-  const quickOptions: { label: string; value: string }[] = [
-    { label: "Today", value: toIsoDate(0) },
-    { label: "Tomorrow", value: toIsoDate(1) },
-    { label: "+2d", value: toIsoDate(2) },
-    { label: "+3d", value: toIsoDate(3) },
-    { label: "Next Mon", value: nextMonday() },
-  ];
-  const label = pickedDate ? new Date(`${pickedDate}T00:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }) : "No date";
+const NATIVE_DATE_CYCLE: { label: string; compute: () => string | "" }[] = [
+  { label: "Date", compute: () => "" },
+  { label: "Today", compute: () => toIsoDateOffset(0) },
+  { label: "Tomorrow", compute: () => toIsoDateOffset(1) },
+  { label: "+2d", compute: () => toIsoDateOffset(2) },
+  { label: "+3d", compute: () => toIsoDateOffset(3) },
+  { label: "Next Mon", compute: () => toIsoDateNextMonday() },
+];
 
-  return (
-    <View style={styles.dateRow}>
-      <Text style={styles.dateRowLabel}>Due: {label}</Text>
-      <View style={styles.dateRowOptions}>
-        {quickOptions.map((opt) => {
-          const active = pickedDate === opt.value;
-          return (
-            <Pressable key={opt.label} onPress={() => setPickedDate(active ? "" : opt.value)} style={[styles.dateChip, active && styles.dateChipActive]}>
-              <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{opt.label}</Text>
-            </Pressable>
-          );
-        })}
-        {Platform.OS === "web" ? (
-          // @ts-ignore -- intentional: HTML input for rich date picker on web
-          <input
-            type="date"
-            value={pickedDate}
-            onChange={(e: any) => setPickedDate(e.target.value)}
-            style={webDateInputStyle}
-          />
-        ) : null}
+function toIsoDateOffset(offsetDays: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
+function toIsoDateNextMonday(): string {
+  const d = new Date();
+  const daysAhead = ((1 - d.getDay() + 7) % 7) || 7;
+  return toIsoDateOffset(daysAhead);
+}
+
+function shortDateLabel(iso: string): string {
+  if (!iso) return "Date";
+  return new Date(`${iso}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+function InlineDateField({ pickedDate, setPickedDate }: InlineDateFieldProps) {
+  if (Platform.OS === "web") {
+    return (
+      <View style={styles.inlineDateWrap}>
+        {/* @ts-ignore -- HTML input for rich date picker on web */}
+        <input
+          type="date"
+          value={pickedDate}
+          onChange={(e: any) => setPickedDate(e.target.value)}
+          style={webInlineDateInputStyle}
+          aria-label="Due date"
+        />
         {pickedDate ? (
-          <Pressable onPress={() => setPickedDate("")} style={styles.dateClear}>
-            <Text style={styles.dateClearText}>Clear</Text>
+          <Pressable onPress={() => setPickedDate("")} style={styles.inlineDateClear}>
+            <Text style={styles.inlineDateClearText}>×</Text>
           </Pressable>
         ) : null}
       </View>
-    </View>
+    );
+  }
+
+  const currentIndex = Math.max(
+    0,
+    NATIVE_DATE_CYCLE.findIndex((step) => step.compute() === pickedDate)
+  );
+  const onCycle = () => {
+    const next = NATIVE_DATE_CYCLE[(currentIndex + 1) % NATIVE_DATE_CYCLE.length];
+    setPickedDate(next.compute());
+  };
+  const display = pickedDate ? shortDateLabel(pickedDate) : "Date";
+
+  return (
+    <Pressable onPress={onCycle} style={styles.inlineDateChip}>
+      <Text style={styles.inlineDateChipText}>{display}</Text>
+    </Pressable>
   );
 }
 
-const webDateInputStyle = {
-  background: "rgba(12,18,40,0.9)",
+const webInlineDateInputStyle = {
+  background: "rgba(9,15,35,0.96)",
   color: "#ECF6FF",
   border: "1px solid rgba(0,229,255,0.35)",
   borderRadius: 8,
@@ -954,7 +1094,34 @@ const webDateInputStyle = {
   fontSize: 12,
   fontWeight: 700,
   outline: "none",
+  minWidth: 138,
+  marginRight: 6,
 } as const;
+
+type ViewToggleHeaderProps = {
+  label: string;
+  onPrev: () => void;
+  onNext: () => void;
+  onReset: () => void;
+  resetLabel: string;
+};
+
+function ViewToggleHeader({ label, onPrev, onNext, onReset, resetLabel }: ViewToggleHeaderProps) {
+  return (
+    <View style={styles.viewToggleHeader}>
+      <Pressable onPress={onPrev} style={styles.viewToggleArrow}>
+        <Text style={styles.viewToggleArrowText}>‹</Text>
+      </Pressable>
+      <Pressable onPress={onReset} style={styles.viewToggleLabelWrap}>
+        <Text style={styles.viewToggleLabel}>{label}</Text>
+        <Text style={styles.viewToggleReset}>{resetLabel}</Text>
+      </Pressable>
+      <Pressable onPress={onNext} style={styles.viewToggleArrow}>
+        <Text style={styles.viewToggleArrowText}>›</Text>
+      </Pressable>
+    </View>
+  );
+}
 
 function QuoteBanner({ quote }: { quote: string }) {
   return (
