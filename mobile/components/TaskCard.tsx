@@ -117,24 +117,6 @@ export function TaskCard({
           </View>
         ) : null}
       </View>
-      <View style={{ flexDirection: "row", marginTop: 6 }}>
-        {task.vibeTags.map((tag) => (
-          <View
-            key={tag}
-            style={{
-              backgroundColor: "rgba(255,43,214,0.15)",
-              borderColor: "rgba(255,43,214,0.55)",
-              borderWidth: 1,
-              borderRadius: 999,
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-              marginRight: 8,
-            }}
-          >
-            <Text style={{ color: "#F8C8FF", fontSize: 12 }}>{formatVibeTag(tag)}</Text>
-          </View>
-        ))}
-      </View>
       <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
         <Pressable
           onPress={handleComplete}
@@ -213,16 +195,3 @@ function formatDueDate(iso: string): string {
   return dayLabel;
 }
 
-function formatVibeTag(tag: string): string {
-  const clean = tag.replace("#", "").toLowerCase();
-  const map: Record<string, string> = {
-    grind: "Deep Focus",
-    chill: "Easy Win",
-    errand: "Errand",
-    deep: "High Energy",
-    someday: "Someday",
-    ugh: "Quick Fix",
-    calendar: "Calendar",
-  };
-  return map[clean] ?? clean.charAt(0).toUpperCase() + clean.slice(1);
-}

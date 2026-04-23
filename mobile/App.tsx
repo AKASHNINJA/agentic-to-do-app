@@ -311,7 +311,12 @@ export default function App() {
 
   if (Platform.OS === "web") {
     return (
-      <LinearGradient colors={[THEME.colors.bgStart, THEME.colors.bgEnd]} style={[styles.screen, { padding: 16 }]}>
+      <LinearGradient colors={[THEME.colors.bgStart, THEME.colors.bgEnd]} style={styles.screen}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          showsVerticalScrollIndicator
+        >
         <QuoteBanner quote={MOTIVATIONAL_QUOTES[quoteIndex]} />
         <Text style={styles.header}>Orbit</Text>
         <View style={styles.segmentPanel}>
@@ -406,6 +411,7 @@ export default function App() {
         </View>
         </LinearGradient>
         {parseStatus ? <Text style={styles.statusText}>{parseStatus}</Text> : null}
+        </ScrollView>
       </LinearGradient>
     );
   }
