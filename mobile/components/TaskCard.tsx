@@ -1,11 +1,12 @@
 import * as Haptics from "expo-haptics";
-import { useEffect, useRef } from "react";
-import { Platform, Pressable, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { Animated as RNAnimated } from "react-native";
 import Reanimated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
 import type { OrbitTask } from "../store/useOrbitStore";
 import { MOTION } from "../constants/motion";
+import { THEME } from "../constants/theme";
+
+const C = THEME.colors;
 
 type TaskCardProps = {
   task: OrbitTask;
@@ -24,21 +25,10 @@ export function TaskCard({
   onDelete,
   onSetStatus,
   statuses,
-  depthIndex = 0,
+  depthIndex: _depthIndex = 0,
 }: TaskCardProps) {
   const tx = useSharedValue(0);
-  const intro = useRef(new RNAnimated.Value(0)).current;
 
-  useEffect(() => {
-    RNAnimated.spring(intro, {
-      toValue: 1,
-      delay: depthIndex * 60,
-      damping: MOTION.spring.damping,
-      stiffness: MOTION.spring.stiffness,
-      mass: MOTION.spring.mass,
-      useNativeDriver: true,
-    }).start();
-  }, [depthIndex, intro]);
   const handleComplete = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     onComplete();
@@ -57,108 +47,62 @@ export function TaskCard({
       tx.value = event.translationX;
     })
     .onEnd(() => {
-      if (tx.value > 90) {
-        runOnJS(handleComplete)();
-      } else if (tx.value < -90) {
-        runOnJS(handleSnooze)();
-      }
+      if (tx.value > 90) runOnJS(handleComplete)();
+      else if (tx.value < -90) runOnJS(handleSnooze)();
       tx.value = withSpring(0, MOTION.spring);
     });
 
+  const isCompleted = task.status === "Completed";
+
   const cardBody = (
-    <RNAnimated.View
-      style={{
-        backgroundColor: "#10162D",
-        borderRadius: 14,
-        padding: 14,
-        marginBottom: 10,
-        transform: [
-          { perspective: 900 },
-          { rotateX: `${Math.max(0, 5 - depthIndex * 0.9)}deg` },
-          { rotateY: `${Math.max(0, 2 - depthIndex * 0.3)}deg` },
-          {
-            translateY: intro.interpolate({
-              inputRange: [0, 1],
-              outputRange: [28, 0],
-            }),
-          },
-          {
-            scale: intro.interpolate({
-              inputRange: [0, 1],
-              outputRange: [0.94, 1],
-            }),
-          },
-        ],
-        opacity: intro,
-        borderWidth: task.status === "Completed" ? 0 : 1,
-        borderColor: "rgba(0,229,255,0.45)",
-        shadowColor: "#00E5FF",
-        shadowOpacity: Math.max(0.1, 0.22 - depthIndex * 0.02),
-        shadowRadius: Math.max(4, 12 - depthIndex),
-        shadowOffset: { width: 0, height: 7 - Math.min(depthIndex, 5) },
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-        <Text style={{ color: "#ECF6FF", fontSize: 16, fontWeight: "700", flexShrink: 1 }}>{task.title}</Text>
-        {task.dueAt ? (
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: "rgba(0,229,255,0.12)",
-              borderColor: "rgba(0,229,255,0.55)",
-              borderWidth: 1,
-              borderRadius: 999,
-              paddingHorizontal: 8,
-              paddingVertical: 2,
-            }}
+    <View style={[styles.card, isCompleted && styles.cardCompleted]}>
+      <View style={styles.topRow}>
+        <View style={styles.titleRow}>
+          <Pressable
+            onPress={handleComplete}
+            style={[styles.checkbox, isCompleted && styles.checkboxDone]}
+            accessibilityLabel={isCompleted ? "Mark not done" : "Mark done"}
           >
-            <Text style={{ color: "#9ED7FF", fontSize: 11, fontWeight: "700" }}>{formatDueDate(task.dueAt)}</Text>
+            {isCompleted ? <Text style={styles.checkboxDoneMark}>✓</Text> : null}
+          </Pressable>
+          <Text style={[styles.title, isCompleted && styles.titleCompleted]} numberOfLines={2}>
+            {task.title}
+          </Text>
+        </View>
+        {task.dueAt ? (
+          <View style={styles.dueChip}>
+            <Text style={styles.dueChipText}>{formatDueDate(task.dueAt)}</Text>
           </View>
         ) : null}
       </View>
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
-        <Pressable
-          onPress={handleComplete}
-          style={{ backgroundColor: "rgba(0,229,255,0.15)", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: "#8FF3FF", fontWeight: "700" }}>Complete</Text>
-        </Pressable>
-        <Pressable
-          onPress={handleSnooze}
-          style={{ backgroundColor: "rgba(255,43,214,0.16)", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: "#FFC0F2", fontWeight: "700" }}>Snooze</Text>
-        </Pressable>
-        <Pressable
-          onPress={onDelete}
-          style={{ backgroundColor: "rgba(255,85,85,0.2)", paddingVertical: 6, paddingHorizontal: 10, borderRadius: 8 }}
-        >
-          <Text style={{ color: "#FFB8B8", fontWeight: "700" }}>Delete</Text>
-        </Pressable>
+
+      <View style={styles.metaRow}>
+        <View style={styles.statusChips}>
+          {statuses.map((status) => {
+            const selected = task.status === status;
+            return (
+              <Pressable
+                key={status}
+                onPress={() => onSetStatus(status)}
+                style={[styles.statusChip, selected && styles.statusChipActive]}
+              >
+                <Text style={[styles.statusChipText, selected && styles.statusChipTextActive]}>
+                  {status}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <View style={styles.actions}>
+          <Pressable onPress={handleSnooze} style={styles.actionButton}>
+            <Text style={styles.actionText}>Snooze</Text>
+          </Pressable>
+          <Pressable onPress={onDelete} style={[styles.actionButton, styles.actionButtonDanger]}>
+            <Text style={[styles.actionText, styles.actionTextDanger]}>Delete</Text>
+          </Pressable>
+        </View>
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-        {statuses.map((status) => {
-          const selected = task.status === status;
-          return (
-            <Pressable
-              key={status}
-              onPress={() => onSetStatus(status)}
-              style={{
-                borderWidth: 1,
-                borderColor: selected ? "#00E5FF" : "rgba(146,168,204,0.35)",
-                borderRadius: 999,
-                paddingHorizontal: 8,
-                paddingVertical: 3,
-                backgroundColor: selected ? "rgba(0,229,255,0.2)" : "rgba(12,18,40,0.8)",
-              }}
-            >
-              <Text style={{ color: selected ? "#D5FAFF" : "#92A8CC", fontSize: 11 }}>{status}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </RNAnimated.View>
+    </View>
   );
 
   if (Platform.OS === "web") return cardBody;
@@ -183,8 +127,7 @@ function formatDueDate(iso: string): string {
   if (diffDays === 0) dayLabel = "Today";
   else if (diffDays === 1) dayLabel = "Tomorrow";
   else if (diffDays === -1) dayLabel = "Yesterday";
-  else if (diffDays > 1 && diffDays < 7)
-    dayLabel = d.toLocaleDateString("en-US", { weekday: "short" });
+  else if (diffDays > 1 && diffDays < 7) dayLabel = d.toLocaleDateString("en-US", { weekday: "short" });
   else dayLabel = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0;
@@ -195,3 +138,128 @@ function formatDueDate(iso: string): string {
   return dayLabel;
 }
 
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: C.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    padding: 14,
+    gap: 10,
+  },
+  cardCompleted: {
+    backgroundColor: C.surfaceMuted,
+    borderColor: C.border,
+  },
+  topRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+    gap: 10,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: C.borderStrong,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: C.surface,
+  },
+  checkboxDone: {
+    backgroundColor: C.accent,
+    borderColor: C.accent,
+  },
+  checkboxDoneMark: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
+    lineHeight: 15,
+  },
+  title: {
+    flex: 1,
+    color: C.textPrimary,
+    fontSize: 15,
+    fontWeight: "600",
+    lineHeight: 20,
+  },
+  titleCompleted: {
+    color: C.textMuted,
+    textDecorationLine: "line-through",
+  },
+  dueChip: {
+    backgroundColor: C.accentSoft,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  dueChipText: {
+    color: C.accentStrong,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  metaRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  statusChips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+  },
+  statusChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  statusChipActive: {
+    backgroundColor: C.accentSoft,
+    borderColor: C.accent,
+  },
+  statusChipText: {
+    color: C.textSecondary,
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  statusChipTextActive: {
+    color: C.accentStrong,
+    fontWeight: "700",
+  },
+  actions: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  actionButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: C.surface,
+  },
+  actionButtonDanger: {
+    borderColor: C.dangerSoft,
+    backgroundColor: C.dangerSoft,
+  },
+  actionText: {
+    color: C.textSecondary,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  actionTextDanger: {
+    color: C.danger,
+    fontWeight: "700",
+  },
+});
